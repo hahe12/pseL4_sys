@@ -32,4 +32,4 @@ fi
 # If we have a CMakeLists.txt in the top level project directory,
 # initialize CMake.
 cmake -DCMAKE_TOOLCHAIN_FILE="$SCRIPT_PATH"/kernel/gcc.cmake -G Ninja "$@" \
-    -DSEL4_CACHE_DIR="$CACHE_DIR" -DTUT_BOARD="pc" -DTUT_ARCH="x86_64" -C "$SCRIPT_PATH/projects/pseL4_sys/settings.cmake" "$SCRIPT_PATH/projects/pseL4_sys"
+    -DSEL4_CACHE_DIR="$CACHE_DIR" -DTUT_BOARD="pc" -DTUT_ARCH="x86_64" "$SCRIPT_PATH/projects/pseL4_sys"
