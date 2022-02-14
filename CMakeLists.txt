@@ -27,7 +27,7 @@ add_executable(pseL4 src/main.c)
 # List of libraries to link with the application.
 target_link_libraries(pseL4
     sel4runtime sel4
-    muslc utils sel4tutorials
+    muslc utils
     sel4muslcsys sel4platsupport sel4utils sel4debug)
 
 # Tell the build system that this application is the root task. 
