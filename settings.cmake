@@ -1,10 +1,10 @@
 #
-# Copyright 2018, Data61, CSIRO (ABN 41 687 119 230)
+# Copyright 2019, Data61, CSIRO (ABN 41 687 119 230)
 #
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
-include_guard(GLOBAL)
+cmake_minimum_required(VERSION 3.7.2)
 
 set(project_dir "${CMAKE_CURRENT_LIST_DIR}/../../")
 file(GLOB project_modules ${project_dir}/projects/*)
@@ -16,73 +16,114 @@ list(
         ${project_dir}/tools/seL4/elfloader-tool/
         ${project_modules}
 )
-set(POLLY_DIR ${project_dir}/tools/polly CACHE INTERNAL "")
+
+set(NANOPB_SRC_ROOT_FOLDER "${project_dir}/tools/nanopb" CACHE INTERNAL "")
+set(OPENSBI_PATH "${project_dir}/tools/opensbi" CACHE STRING "OpenSBI Folder location")
+
+set(SEL4_CONFIG_DEFAULT_ADVANCED ON)
 
 include(application_settings)
 
-# Deal with the top level target-triplet variables.
-if(NOT TUT_BOARD)
-    message(
-        FATAL_ERROR
-            "Please select a board to compile for. Choose either pc or zynq7000\n\t`-DTUT_BOARD=<PREFERENCE>`"
-    )
+include(${CMAKE_CURRENT_LIST_DIR}/easy-settings.cmake)
+
+correct_platform_strings()
+
+find_package(seL4 REQUIRED)
+sel4_configure_platform_settings()
+
+set(valid_platforms ${KernelPlatform_all_strings} ${correct_platform_strings_platform_aliases})
+set_property(CACHE PLATFORM PROPERTY STRINGS ${valid_platforms})
+if(NOT "${PLATFORM}" IN_LIST valid_platforms)
+    message(FATAL_ERROR "Invalid PLATFORM selected: \"${PLATFORM}\"
+Valid platforms are: \"${valid_platforms}\"")
 endif()
 
-# Set arch and board specific kernel parameters here.
-if(${TUT_BOARD} STREQUAL "pc")
-    set(KernelArch "x86" CACHE STRING "" FORCE)
-    set(KernelPlatform "pc99" CACHE STRING "" FORCE)
-    if(${TUT_ARCH} STREQUAL "ia32")
-        set(KernelSel4Arch "ia32" CACHE STRING "" FORCE)
-    elseif(${TUT_ARCH} STREQUAL "x86_64")
-        set(KernelSel4Arch "x86_64" CACHE STRING "" FORCE)
+# Declare a cache variable that enables/disablings the forcing of cache variables to
+# the specific test values. By default it is disabled
+set(Sel4testAllowSettingsOverride OFF CACHE BOOL "Allow user to override configuration settings")
+if(NOT Sel4testAllowSettingsOverride)
+    # We use 'FORCE' when settings these values instead of 'INTERNAL' so that they still appear
+    # in the cmake-gui to prevent excessively confusing users
+    if(ARM_HYP)
+        set(KernelArmHypervisorSupport ON CACHE BOOL "" FORCE)
+    endif()
+
+    if(KernelPlatformQEMUArmVirt)
+        set(SIMULATION ON CACHE BOOL "" FORCE)
+    endif()
+
+    if(SIMULATION)
+        ApplyCommonSimulationSettings(${KernelSel4Arch})
     else()
-        message(FATAL_ERROR "Unsupported PC architecture ${TUT_ARCH}")
+        if(KernelArchX86)
+            set(KernelIOMMU ON CACHE BOOL "" FORCE)
+        endif()
     endif()
-elseif(${TUT_BOARD} STREQUAL "zynq7000")
-    # Do a quick check and warn the user if they haven't set
-    # -DARM/-DAARCH32/-DAARCH64.
-    if(
-        (NOT ARM)
-        AND (NOT AARCH32)
-        AND ((NOT CROSS_COMPILER_PREFIX) OR ("${CROSS_COMPILER_PREFIX}" STREQUAL ""))
+
+    # sel4test specific config settings.
+
+    if(SIMULATION)
+        set(Sel4testSimulation ON CACHE BOOL "" FORCE)
+        set(Sel4testHaveCache OFF CACHE BOOL "" FORCE)
+    else()
+        set(Sel4testSimulation OFF CACHE BOOL "" FORCE)
+        set(Sel4testHaveCache ON CACHE BOOL "" FORCE)
+    endif()
+
+    if(KernelPlatformQEMUArmVirt)
+        if(KernelArmExportPCNTUser AND KernelArmExportPTMRUser)
+            set(Sel4testHaveTimer ON CACHE BOOL "" FORCE)
+        else()
+            set(Sel4testHaveTimer OFF CACHE BOOL "" FORCE)
+        endif()
+    elseif(
+        KernelPlatformZynqmp
+        OR KernelPlatformPolarfire
+        OR (SIMULATION AND (KernelArchRiscV OR KernelArchARM))
     )
-        message(
-            WARNING
-                "The target machine is an ARM machine. Unless you've defined -DCROSS_COMPILER_PREFIX, you may need to set one of:\n\t-DARM/-DAARCH32/-DAARCH64"
-        )
+        # Frequency settings of the ZynqMP make the ltimer tests problematic
+        # Polarfire does not have a complete ltimer implementation
+        set(Sel4testHaveTimer OFF CACHE BOOL "" FORCE)
+    else()
+        set(Sel4testHaveTimer ON CACHE BOOL "" FORCE)
     endif()
 
-    set(KernelArch "arm" CACHE STRING "" FORCE)
-    set(KernelSel4Arch "aarch32" CACHE STRING "" FORCE)
-    set(KernelPlatform "zynq7000" CACHE STRING "" FORCE)
-    ApplyData61ElfLoaderSettings(${KernelPlatform} ${KernelSel4Arch})
-else()
-    message(FATAL_ERROR "Unsupported board ${TUT_BOARD}.")
-endif()
+    # Check the hardware debug API non simulated (except for ia32, which can be simulated),
+    # or platforms that don't support it.
+    if(((NOT SIMULATION) OR KernelSel4ArchIA32) AND NOT KernelHardwareDebugAPIUnsupported)
+        set(HardwareDebugAPI ON CACHE BOOL "" FORCE)
+    else()
+        set(HardwareDebugAPI OFF CACHE BOOL "" FORCE)
+    endif()
 
-include(${project_dir}/kernel/configs/seL4Config.cmake)
-set(CapDLLoaderMaxObjects 20000 CACHE STRING "" FORCE)
-set(KernelRootCNodeSizeBits 16 CACHE STRING "")
+    ApplyCommonReleaseVerificationSettings(${RELEASE} ${VERIFICATION})
 
-# For the tutorials that do initialize the plat support serial printing they still
-# just want to use the kernel debug putchar if it exists
-set(LibSel4PlatSupportUseDebugPutChar true CACHE BOOL "" FORCE)
+    if(BAMBOO)
+        set(LibSel4TestPrintXML ON CACHE BOOL "" FORCE)
+    else()
+        set(LibSel4TestPrintXML OFF CACHE BOOL "" FORCE)
+    endif()
 
-# Just let the regular abort spin without calling DebugHalt to prevent needless
-# confusing output from the kernel for a tutorial
-set(LibSel4MuslcSysDebugHalt FALSE CACHE BOOL "" FORCE)
+    if(DOMAINS)
+        set(KernelNumDomains 16 CACHE STRING "" FORCE)
+    else()
+        set(KernelNumDomains 1 CACHE STRING "" FORCE)
+    endif()
 
-# Only configure a single domain for the domain scheduler
-set(KernelNumDomains 1 CACHE STRING "" FORCE)
+    if(SMP)
+        if(NUM_NODES MATCHES "^[0-9]+$")
+            set(KernelMaxNumNodes ${NUM_NODES} CACHE STRING "" FORCE)
+        else()
+            set(KernelMaxNumNodes 4 CACHE STRING "" FORCE)
+        endif()
+    else()
+        set(KernelMaxNumNodes 1 CACHE STRING "" FORCE)
+    endif()
 
-# We must build the debug kernel because the tutorials rely on seL4_DebugPutChar
-# and they don't initialize a platsupport driver.
-ApplyCommonReleaseVerificationSettings(FALSE FALSE)
+    if(MCS)
+        set(KernelIsMCS ON CACHE BOOL "" FORCE)
+    else()
+        set(KernelIsMCS OFF CACHE BOOL "" FORCE)
+    endif()
 
-# We will attempt to generate a simulation script, so try and generate a simulation
-# compatible configuration
-ApplyCommonSimulationSettings(${KernelSel4Arch})
-if(FORCE_IOMMU)
-    set(KernelIOMMU ON CACHE BOOL "" FORCE)
 endif()
