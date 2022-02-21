@@ -20,7 +20,7 @@ list(
 set(NANOPB_SRC_ROOT_FOLDER "${project_dir}/tools/nanopb" CACHE INTERNAL "")
 set(OPENSBI_PATH "${project_dir}/tools/opensbi" CACHE STRING "OpenSBI Folder location")
 
-set(SEL4_CONFIG_DEFAULT_ADVANCED ON)
+set(SEL4_CONFIG_DEFAULT_ADVANCED OFF)
 
 include(application_settings)
 

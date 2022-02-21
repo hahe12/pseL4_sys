@@ -21,18 +21,10 @@ sel4_import_libsel4()
 util_libs_import_libraries()
 sel4_libs_import_libraries()
 
-# Name the executable and list source files required to build it
-add_executable(pseL4 src/main.c)
 
-# List of libraries to link with the application.
-target_link_libraries(pseL4
-    sel4runtime sel4
-    muslc utils
-    sel4muslcsys sel4platsupport sel4utils sel4debug)
-
-# Tell the build system that this application is the root task. 
-include(rootserver)
-DeclareRootserver(pseL4)
+add_subdirectory(vbus)
+add_subdirectory(apps)
+add_subdirectory(core)
 
 include(simulation)
 GenerateSimulateScript()
