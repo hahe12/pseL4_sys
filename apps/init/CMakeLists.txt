@@ -4,6 +4,6 @@ project(init C)
 
 add_executable(init src/main.c)
 
-target_link_libraries(init sel4runtime sel4 muslc sel4muslcsys utils c)
+target_link_libraries(init sel4runtime muslc sel4muslcsys psel4muslcsys utils)
 
 set_property(GLOBAL APPEND PROPERTY apps_property "$<TARGET_FILE:init>")
