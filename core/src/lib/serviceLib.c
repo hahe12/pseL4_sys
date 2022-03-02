@@ -1,5 +1,4 @@
 #include <serviceLib.h>
-#include <ktaskLib.h>
 #include <errno.h>
 
 static Service* _services = NULL;
@@ -41,7 +40,5 @@ int NameServerUnregister(Service* s)
 void NameServiceStart(){
     Service *s, *temp;
     HASH_ITER (hh, _services, s, temp){
-        kTaskCreate();
     }
-
 }

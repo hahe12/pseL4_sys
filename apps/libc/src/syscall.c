@@ -11,8 +11,6 @@ long pseL4_vsyscall(long sysnum, ...)
     long ret = -1;
     switch (sysnum)
     {
-    case __NR_stat:
-        break;
     default:
         break;
     }

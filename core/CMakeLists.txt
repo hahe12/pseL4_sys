@@ -15,9 +15,14 @@ target_include_directories(core PRIVATE include)
 
 # List of libraries to link with the application.
 target_link_libraries(core
-    sel4runtime sel4
-    muslc utils
-    sel4muslcsys sel4platsupport sel4allocman sel4utils sel4debug
+    muslc 
+    sel4runtime 
+    sel4muslcsys
+    sel4platsupport 
+    sel4allocman
+    cpio
+    sel4vka
+    utils
 )
 
 # Tell the build system that this application is the root task. 
